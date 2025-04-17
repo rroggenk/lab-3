@@ -25,6 +25,8 @@ format:
 #| warning: false
 #| include: false 
 
+# Note: I did use Google Gemini for help on this code chunk. I was having a lot of trouble trying to combine data reading steps into one step so I can do it all at the beginning in one chunk instead of just in the code chunk of the plot, so I started doing that and then had to ask Google Gemini for help because I was genuinely crashing out. Then my code for the data cards ending up depending on this, so even though I didn't end up using it, I had to keep it all. Just wanted to be up front and open and honest, #live laugh loving life 
+
 # Load Libraries
 library(tidyverse)
 library(readxl)
@@ -36,7 +38,7 @@ library(maps)
 library(sf)
 library(geojsonio)
 library(DT) 
-library(ggrepel) # For geom_text_repel
+library(ggrepel) 
 
 # --- Data Loading and Prep Code (adapted from Lab 2) ---
 
@@ -255,7 +257,6 @@ if (!is.null(wgm2018_full_raw) && nrow(country_names) > 0 && nrow(region_names) 
   global_avg_disagree_effective <- NA
   health_data_json <- NULL
 }
-
 ```
 
 # Vaccine Views
@@ -288,86 +289,79 @@ Global Avg: Disagree Effective
 #| title: "Percentage of People who Believe Vaccines are Safe, by Country and Global Region" 
 #| fig-height: 6 
 
-# Replicating Lab 2 Plot 1
-if (exists("vaccine_data") && nrow(vaccine_data) > 0) {
+vaccine_data <- wgm2018_full %>%
+  select(global_region, country, Q25) %>%
+  mutate(vaccine_safe = case_when(
+    Q25 %in% 1:2 ~ 1,  # strongly/somewhat agree
+    Q25 %in% 3:5 ~ 0,  # neutral or disagree
+    TRUE ~ NA_real_   # don't know / refused
+    )) %>%
+  # remove don't know / refused
+  filter(vaccine_safe <= 1) %>%
+  group_by(country, global_region) %>%
+  # country averages
+  summarise(vaccine_safe = mean(vaccine_safe)) %>%
+  group_by(global_region) %>%
+  # regional medians
+  mutate(
+    region_median = median(vaccine_safe),
+    global_region = fct_reorder(as.factor(global_region), desc(region_median)),
+    min_max = case_when(
+      vaccine_safe == max(vaccine_safe) ~ country,
+      vaccine_safe == min(vaccine_safe) ~ country)
+  )
   
-  # Define colors from Lab 2 plot explicitly
-  lab2_colors <- c("skyblue1", "seagreen4", "yellow2", "orangered4", "salmon1", "dodgerblue4")
-  
-  # Ensure the number of colors matches the number of factor levels
-  num_regions <- nlevels(vaccine_data$global_region)
-  if (length(lab2_colors) < num_regions) {
-    # If not enough colors, repeat or use a default palette
-    plot_colors <- rep(lab2_colors, length.out = num_regions)
-    # Or consider using a palette function: plot_colors <- scales::hue_pal()(num_regions)
-  } else {
-    plot_colors <- lab2_colors[1:num_regions]
-  }
-  # Assign names to colors based on factor levels for consistency
-  names(plot_colors) <- levels(vaccine_data$global_region)
-
-  plot1_lab2 <- ggplot(vaccine_data, 
-                       aes(y = global_region, # Factor ordered in prep
-                           x = vaccine_safe, 
-                           color = global_region)) +
-    geom_point(aes(alpha = 0.78, size = 3)) + # Size and alpha from Lab 2
-    # Lab 2 used geom_errorbar for median - replicating that
+vaccine_data %>%
+  ggplot(aes(y = reorder(global_region, region_median), 
+             x = vaccine_safe, 
+             color = global_region)) +
+    geom_point(aes(alpha = 0.78, 
+                   size = 3)) +
     geom_errorbar(aes(y = global_region, 
                       xmax = region_median, 
                       xmin = region_median),
-                  size = 0.5, # Size from Lab 2
-                  linetype = "solid", # Linetype from Lab 2
-                  width = 1, # Width from Lab 2
-                  color = "black") + # Color from Lab 2
-    scale_color_manual(values = plot_colors) + # Use named colors from Lab 2
-    # Lab 2 used geom_linerange - adding it back (though errorbar might suffice)
-    # geom_linerange(aes(xmin = region_median, 
-    #                    xmax = region_median,
-    #                    group = global_region)) + # Removed, redundant with errorbar
-    labs(
-      x = NULL, 
-      y = NULL,
-      title = "Percentage of People who Believe Vaccines are Safe,\nby Country and Global Region" # Title from Lab 2
-    ) +
-    theme_bw() + # Theme from Lab 2
-    theme(
-      legend.position = "none",
-      panel.grid.major.y = element_blank(),
-      panel.grid.minor.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.text.y = element_blank(), # Y-axis text removed in Lab 2 plot
-      plot.title = element_text(face = 'bold') # Title style from Lab 2
-    ) +
-    scale_x_continuous(
-      breaks = seq(0.2, 1, by = 0.1), # Breaks from Lab 2
-      labels = label_percent(),
-      sec.axis = dup_axis() # Duplicate axis from Lab 2
-    ) +
-    guides(color = FALSE, alpha = FALSE, size = FALSE) + # Hide guides as in Lab 2
-    # Add region labels using geom_text as in Lab 2
+                  size = 0.5, 
+                  linetype = "solid", 
+                  width = 1, 
+                  color = "black") +
+    scale_color_manual(values = c("skyblue1", "seagreen4", "yellow2",
+                                  "orangered4", "salmon1", "dodgerblue4")) +
+    geom_linerange(aes(xmin = region_median, 
+                       xmax = region_median,
+                       group = global_region)) +
+    labs(x = NULL, 
+         y = NULL,
+         title = "Percentage of People who Believe Vaccines are Safe,
+         \nby Country and Global Region") +
+    theme_bw() +
+    theme(legend.position = "none",
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.text.y = element_blank(),
+          plot.title = element_text(face = 'bold')) +
+    scale_x_continuous(breaks = seq(0.2, 1, by = 0.1),
+                       labels = label_percent(),
+                       sec.axis = dup_axis()) +
+    guides(color = FALSE) +
     geom_text(aes(y = global_region, x = 0.2, label = global_region), 
-              vjust = -1, hjust = 0, size = 4, fontface = "bold",
-              # Need to ensure color doesn't map from aes here
-              color = "black", # Set color directly
-              check_overlap = TRUE) + 
-    # Add min/max labels using geom_text as in Lab 2
+              vjust = -1,
+              hjust = 0,
+              size = 4,
+              fontface = "bold") +
     geom_text(aes(label = min_max),
-              na.rm = TRUE, # Remove NA labels
-              vjust = 0, hjust = 0, size = 3, color = "gray18", # Style from Lab 2
-              check_overlap = TRUE) +
-    # Add annotation for median as in Lab 2
+                    vjust = 0,
+                    hjust = 0,
+                    size = 3,
+                    color = "gray18") +
     annotate(geom = "text",
              x = 0.865, 
-             y = "Asia", # Specific position from Lab 2 - might need adjustment if factor levels change
+             y = "Asia", 
              label = "Regional Median",
-             color = "black", size = 2.5, hjust = 0, vjust = -3) # Style from Lab 2
-
-  # Render the plot
-  plot1_lab2
-  
-} else {
-  print("Vaccine safety data is not available for plotting.")
-}
+             color = "black", 
+             size = 2.5,
+             hjust = 0,
+             vjust = -3)
 ```
 :::
 
@@ -376,43 +370,40 @@ if (exists("vaccine_data") && nrow(vaccine_data) > 0) {
 #| label: plot-safety-vs-effectiveness-lab2
 #| title: "Scatterplot exploring people's perceptions of vaccine safety and vaccine effectiveness"
 
-# Replicating Lab 2 Plot 3 (plotly version)
-if (exists("vaccine_plot_data") && nrow(vaccine_plot_data) > 0) {
+# Compiling vaccine safety/effectiveness data 
+vaccine_plot <- wgm2018_full %>%
+  select(country, Q25, Q26) %>%
+  mutate(disagree_safe = case_when(Q25 <= 3 ~ 0,
+                                   Q25 <= 5 ~ 1,
+                                   TRUE ~ 0),
+         disagree_effective = case_when(Q26 <= 3 ~ 0,
+                                        Q26 <= 5 ~ 1,
+                                        TRUE ~ 0)) %>%
+  group_by(country) %>%
+  summarise(across(c(disagree_safe, disagree_effective), mean, na.rm = TRUE)) %>%
+  ggplot(aes(x = disagree_safe, y = disagree_effective)) +
+  geom_point(aes(text = paste0("Country: ", country, "<br>",
+                               "Disagree vaccines are safe: ", 
+                               round(disagree_safe * 100, 2), "%<br>",
+                               "Disagree vaccines are effective: ", 
+                               round(disagree_effective * 100, 2), "%")),
+             color = "skyblue1", shape = 15, size = 1.8) +
+  geom_smooth(method = "lm", se = FALSE, color = "yellow2", linewidth = 0.8) +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1),
+                     labels = label_percent()) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1),
+                     labels = label_percent()) +    
+  labs(x = NULL,
+       y = NULL)
 
-  # Create the base ggplot object as in Lab 2
-  vaccine_plot_lab2 <- ggplot(vaccine_plot_data, 
-                              aes(x = disagree_safe_pct, y = disagree_effective_pct)) +
-    geom_point(aes(text = paste0("Country: ", country, "<br>",
-                                 "Disagree vaccines are safe: ", 
-                                 round(disagree_safe_pct * 100, 2), "%<br>", # Use calculated pct
-                                 "Disagree vaccines are effective: ", 
-                                 round(disagree_effective_pct * 100, 2), "%")), # Use calculated pct
-               color = "skyblue1", shape = 15, size = 1.8) + # Style from Lab 2
-    geom_smooth(method = "lm", se = FALSE, color = "yellow2", linewidth = 0.8) + # Style from Lab 2
-    theme_bw() + # Theme from Lab 2
-    scale_x_continuous(breaks = seq(0, 1, by = 0.1), labels = label_percent()) + # Axis from Lab 2
-    scale_y_continuous(breaks = seq(0, 1, by = 0.1), labels = label_percent()) + # Axis from Lab 2
-    labs(x = NULL, y = NULL) # Labels from Lab 2
-
-  # Turn into interactive plotly plot with layout from Lab 2
-  plotly_plot_lab2 <- ggplotly(vaccine_plot_lab2, tooltip = "text") %>%
-    layout(
-      title = list(
-          text = paste0("Scatterplot exploring people's perceptions of vaccine safety <br> and vaccine effectiveness",
-                        "<br>",
-                        "<sup>Percentage of people who disagree that vaccines are safe by percentage of people who <br> disagree that vaccines are effective</sup>"
-                       ),
-          x = 0.01, 
-          xanchor = "left" # Layout settings from Lab 2
-          ),
-      margin = list(t = 150) # Margin from Lab 2
-      )
-      
-  plotly_plot_lab2
-
-} else {
-  print("Vaccine disagreement data is not available for plotting.")
-}
+# Turn into interactive plotly plot
+ggplotly(vaccine_plot, tooltip = "text") %>%
+  layout(title = list(text = paste0("Scatterplot exploring people's perceptions of vaccine safety <br> and vaccine effectiveness",
+                                    "<br><sup>Percentage of people who disagree that vaccines are safe by percentage of people who <br> disagree that vaccines are effective</sup>"),
+                      x = 0.01,  
+                      xanchor = "left"),
+         margin = list(t = 150))
 ```
 :::
 
@@ -425,82 +416,52 @@ if (exists("vaccine_plot_data") && nrow(vaccine_plot_data) > 0) {
 #| label: map-health-interest-lab2
 #| title: "Map of interest in learning more about medicine, disease, or health by country"
 
-# Replicating Lab 2 Plot 2 (Leaflet Map)
-if (!is.null(health_data_json) && nrow(health_data_json) > 0) {
+# Compiling interest in knowing more about medicine, disease or health data 
+health_data <- wgm2018_full %>%
+  select(country, Q7) %>%
+  filter(Q7 %in% c(1, 2)) %>%
+  mutate(conf = case_when(
+    Q7 == 2 ~ 0,
+    Q7 == 1 ~ 1)) %>%
+  group_by(country) %>%
+  summarise(average = mean(conf, na.rm = TRUE)) %>%
+  mutate(percentage = average * 100) %>%
+  select(country, percentage)
 
-  # Palette using viridis "plasma" - from Lab 2
-  map_palette_lab2 <- colorNumeric("plasma", domain = health_data_json$percentage, na.color = "#bdbdbd")
 
-  leaflet(health_data_json, options = leafletOptions(minZoom = 1.5)) %>% # Keep min zoom
-    # setView from Lab 2
-    setView(lng = 0, lat = 0, zoom = 1) %>% 
-    addPolygons(
-      stroke = FALSE, # Style from Lab 2
-      smoothFactor = 0.2, # Style from Lab 2
-      fillOpacity = 1, # Style from Lab 2
-      color = ~map_palette_lab2(percentage), # Palette from Lab 2
-      # Label formatting from Lab 2
-      label = paste0(health_data_json$country, ": ", 
-                     round(health_data_json$percentage, 1), "%"),
-      # Highlight options from Lab 2
-      highlightOptions = highlightOptions(weight = 5,
-                                          color = "#000000",
-                                          fillOpacity = 0.7)
-      ) %>%
-    addLegend(
-      pal = map_palette_lab2, # Use Lab 2 palette 
-      values = ~percentage,
-      opacity = 0.8, # Opacity from Lab 2
-      title = "Interest level (%)", # Title from Lab 2
-      position = "bottomleft", # Position from Lab 2
-      labFormat = labelFormat(suffix = "%"), # Format from Lab 2
-      na.label = "No Data"
-      ) %>%
-    # addControl for title from Lab 2
-    addControl(
-        html = "<div class='map-title'>Map of interest in learning more about medicine,<br>disease, or health by country</div>",
-        position = "topright" # Position from Lab 2
-        )
+# Load GeoJSON data of all countries
+world_geojson <- geojson_read("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json", what = "sp")
 
-} else {
-  # Display a message if map data is unavailable
-  htmltools::tags$div(
-    style = "padding: 20px; text-align: center; color: grey;",
-    "Map data is not available or could not be loaded."
-  )
-}
+world_geojson <- world_geojson %>%
+  st_as_sf() %>%
+  rename(country = name)
+
+# Combining health data and GeoJSON data
+health_data_json <- world_geojson %>%
+  st_as_sf() %>%
+  left_join(health_data, by = "country") 
+
+# Leaflet Map
+pallatte <- colorNumeric("plasma", domain = health_data_json$percentage)
+
+leaflet(health_data_json) %>%
+  setView(lng = 0, lat = 0, zoom = 1) %>%
+  addPolygons(stroke = FALSE, 
+              smoothFactor = 0.2, 
+              fillOpacity = 1,
+              color = ~pallatte(percentage),
+              label = paste0(health_data_json$country, ": ", 
+                             round(health_data_json$percentage, 1), "%"),
+              highlightOptions = highlightOptions(weight = 5,
+                                                  color = "#000000",
+                                                  fillOpacity = 0.7)) %>%
+  addLegend(pallatte, 
+            values = ~percentage,
+            opacity = 0.8,
+            title = "Interest level (%)",
+            position = "bottomleft",
+            labFormat = labelFormat(suffix = "%")) %>%
+  addControl(html = "<div class='map-title'>Map of interest in learning more about medicine,<br>disease, or health by country</div>",
+             position = "topright")
 ```
 :::
-
-## Column {width=35%}
-
-```{r}
-#| label: table-health-data
-#| title: "Country-Level Health Interest Data" 
-
-# Displaying the data table (no corresponding plot from Lab 2)
-if (exists("health_data") && nrow(health_data) > 0) {
-  
-  health_data %>%
-    select(country, global_region, percentage) %>%
-    mutate(percentage = round(percentage, 1)) %>% 
-    rename(Country = country, Region = global_region, `Interest (%)` = percentage) %>%
-    arrange(Region, desc(`Interest (%)`)) %>% # Arrange data
-    datatable(
-        options = list(
-            pageLength = 10, 
-            searching = TRUE, 
-            lengthChange = FALSE, # Hide length change dropdown
-             scrollY = 'calc(100vh - 250px)', # Adjust height dynamically
-             scrollCollapse = TRUE,
-             paging = TRUE # Keep paging
-             ), 
-        rownames = FALSE,
-        filter = 'top', # Add column filters
-        class = 'cell-border stripe hover compact', # More compact styling
-        width = "100%" # Ensure table uses full card width
-      )
-              
-} else {
-  print("Health interest data is not available for table display.")
-}
