@@ -1,0 +1,19 @@
+project:
+  type: website
+
+format:
+  html:
+    theme: cosmo
+  dashboard:
+    css: styles.css
+
+metadata-files:
+  - _quarto.yml
+
+execute:
+  freeze: auto
+  eval: true
+
+exclude:
+  - readme.md
+

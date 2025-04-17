@@ -1,0 +1,4 @@
+- source: project
+  quarto-pub:
+    - id: 0dd0bfc0-1fd9-4d6c-8705-4fd101dff912
+      url: 'https://rroggenk.quarto.pub/lab3-dashboard'

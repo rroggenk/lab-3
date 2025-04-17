@@ -1,12 +1,12 @@
 ---
 title: "Global Health Monitor Dashboard"
-format: 
+format:
   dashboard:
     theme: cosmo # Using a standard Bootswatch theme
     logo: images/Wellcome_Trust_logo.png # Replace with your logo file path
     orientation: columns
     nav-tabs: true
-    nav-buttons: 
+    nav-buttons:
     - icon: github
       href: https://github.com/rroggenk/
       aria-label: GitHub
